@@ -2,6 +2,7 @@ package api
 
 import (
 	"backend/kafka"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -20,6 +21,14 @@ func Initialize(service kafka.KafkaService) {
 // UpdateBootstrapServer updates the bootstrap server for the Kafka service
 func UpdateBootstrapServer(bootstrapServer string) {
 	log.Printf("UpdateBootstrapServer called with: %s", bootstrapServer)
+
+	// If the server is localhost, use 127.0.0.1 instead
+	if strings.HasPrefix(bootstrapServer, "localhost:") {
+		port := strings.Split(bootstrapServer, ":")[1]
+		bootstrapServer = "127.0.0.1:" + port
+		log.Printf("Converted localhost to 127.0.0.1: %s", bootstrapServer)
+	}
+
 	// Create a new Kafka client with the updated broker address
 	newClient := kafka.NewKafkaClient(bootstrapServer)
 	// Update the global kafkaService with the new client
@@ -52,11 +61,19 @@ func GetMessages(c *gin.Context) {
 	limit, _ := strconv.Atoi(limitStr)
 	sortOrder := c.DefaultQuery("sort", "newest")
 
+	log.Printf("Attempting to fetch messages for topic: %s with limit: %d and sort: %s", topic, limit, sortOrder)
+
 	messages, err := kafkaService.FetchMessages(topic, limit, sortOrder)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Error fetching messages: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   err.Error(),
+			"details": fmt.Sprintf("Failed to fetch messages for topic %s: %v", topic, err),
+		})
 		return
 	}
+
+	log.Printf("Successfully fetched %d messages for topic: %s", len(messages), topic)
 	c.JSON(http.StatusOK, messages)
 }
 

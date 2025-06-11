@@ -23,6 +23,7 @@ type KafkaClient struct {
 
 // NewKafkaClient creates a new instance of KafkaClient
 func NewKafkaClient(brokerAddr string) *KafkaClient {
+	log.Printf("Creating new Kafka client with broker: %s", brokerAddr)
 	return &KafkaClient{
 		broker: brokerAddr,
 	}
@@ -30,20 +31,29 @@ func NewKafkaClient(brokerAddr string) *KafkaClient {
 
 // UpdateBroker updates the broker address
 func (k *KafkaClient) UpdateBroker(brokerAddr string) {
+	log.Printf("Updating Kafka broker to: %s", brokerAddr)
 	k.broker = brokerAddr
 }
 
 // ListTopics returns a list of all topics in the Kafka cluster
 func (k *KafkaClient) ListTopics() ([]Topic, error) {
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": k.broker})
+	config := &kafka.ConfigMap{
+		"bootstrap.servers":       k.broker,
+		"client.id":               "kafka-ui-list-topics",
+		"socket.timeout.ms":       5000,
+		"broker.address.family":   "v4", // Force IPv4
+		"socket.keepalive.enable": true,
+	}
+
+	admin, err := kafka.NewAdminClient(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create admin client: %v", err)
 	}
 	defer admin.Close()
 
 	md, err := admin.GetMetadata(nil, false, 5000)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
 
 	topics := []Topic{}
@@ -85,24 +95,38 @@ func (k *KafkaClient) ListTopics() ([]Topic, error) {
 
 // FetchMessages reads a limited number of messages from the given topic
 func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) ([]Message, error) {
-	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": k.broker,
-		"group.id":          fmt.Sprintf("temp-meta-%d", time.Now().UnixNano()),
-		"auto.offset.reset": "earliest",
-	})
+	log.Printf("Creating consumer for topic: %s with broker: %s", topic, k.broker)
+
+	config := &kafka.ConfigMap{
+		"bootstrap.servers":       k.broker,
+		"group.id":                fmt.Sprintf("temp-meta-%d", time.Now().UnixNano()),
+		"auto.offset.reset":       "earliest",
+		"broker.address.family":   "v4",
+		"socket.timeout.ms":       5000,
+		"socket.keepalive.enable": true,
+	}
+
+	consumer, err := kafka.NewConsumer(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create consumer: %v", err)
 	}
 	defer consumer.Close()
 
 	// Get topic metadata
+	log.Printf("Fetching metadata for topic: %s", topic)
 	metadata, err := consumer.GetMetadata(&topic, false, 5000)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get metadata: %v", err)
+	}
+
+	if len(metadata.Topics) == 0 || len(metadata.Topics[topic].Partitions) == 0 {
+		return nil, fmt.Errorf("topic %s not found or has no partitions", topic)
 	}
 
 	// Get partition information
 	partitions := metadata.Topics[topic].Partitions
+	log.Printf("Found %d partitions for topic %s", len(partitions), topic)
+
 	msgChan := make(chan []Message, len(partitions))
 	errChan := make(chan error, len(partitions))
 
@@ -113,21 +137,38 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 		go func(partition kafka.PartitionMetadata) {
 			defer wg.Done()
 
-			partitionConsumer, err := kafka.NewConsumer(&kafka.ConfigMap{
-				"bootstrap.servers":  k.broker,
-				"group.id":           fmt.Sprintf("temp-consumer-%d-%d", time.Now().UnixNano(), partition.ID),
-				"auto.offset.reset":  "earliest",
-				"enable.auto.commit": false,
-			})
+			partitionConfig := &kafka.ConfigMap{
+				"bootstrap.servers":       k.broker,
+				"group.id":                fmt.Sprintf("temp-consumer-%d-%d", time.Now().UnixNano(), partition.ID),
+				"auto.offset.reset":       "earliest",
+				"enable.auto.commit":      false,
+				"broker.address.family":   "v4",
+				"socket.timeout.ms":       5000,
+				"socket.keepalive.enable": true,
+			}
+
+			partitionConsumer, err := kafka.NewConsumer(partitionConfig)
 			if err != nil {
-				errChan <- fmt.Errorf("partition %d: %v", partition.ID, err)
+				errChan <- fmt.Errorf("partition %d: failed to create consumer: %v", partition.ID, err)
 				return
 			}
 			defer partitionConsumer.Close()
 
+			log.Printf("Querying watermark offsets for topic: %s, partition: %d", topic, partition.ID)
 			low, high, err := partitionConsumer.QueryWatermarkOffsets(topic, partition.ID, 5000)
 			if err != nil {
-				errChan <- fmt.Errorf("partition %d: %v", partition.ID, err)
+				if err.(kafka.Error).Code() == kafka.ErrUnknownPartition {
+					log.Printf("Partition %d does not exist, skipping", partition.ID)
+					msgChan <- []Message{} // Send empty messages for non-existent partition
+					return
+				}
+				errChan <- fmt.Errorf("partition %d: failed to query watermark offsets: %v", partition.ID, err)
+				return
+			}
+
+			if low == high {
+				log.Printf("No messages in partition %d (low=%d, high=%d)", partition.ID, low, high)
+				msgChan <- []Message{} // Send empty messages for empty partition
 				return
 			}
 
@@ -141,9 +182,11 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 				Partition: partition.ID,
 				Offset:    kafka.Offset(start),
 			}
+
+			log.Printf("Assigning partition %d for topic: %s", partition.ID, topic)
 			err = partitionConsumer.Assign([]kafka.TopicPartition{tp})
 			if err != nil {
-				errChan <- fmt.Errorf("partition %d: %v", partition.ID, err)
+				errChan <- fmt.Errorf("partition %d: failed to assign partition: %v", partition.ID, err)
 				return
 			}
 
@@ -181,7 +224,7 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 					timeoutCount = 0
 				case kafka.Error:
 					if msg.Code() != kafka.ErrTimedOut {
-						errChan <- fmt.Errorf("partition %d: %v", partition.ID, msg)
+						errChan <- fmt.Errorf("partition %d: consumer error: %v", partition.ID, msg)
 						return
 					}
 				}
@@ -206,13 +249,18 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 		allMessages = append(allMessages, msgs...)
 	}
 
-	sort.Slice(allMessages, func(i, j int) bool {
-		if sortOrder == "oldest" {
+	// Sort messages based on sortOrder
+	if sortOrder == "newest" {
+		sort.Slice(allMessages, func(i, j int) bool {
+			return allMessages[i].Timestamp > allMessages[j].Timestamp
+		})
+	} else {
+		sort.Slice(allMessages, func(i, j int) bool {
 			return allMessages[i].Timestamp < allMessages[j].Timestamp
-		}
-		return allMessages[i].Timestamp > allMessages[j].Timestamp
-	})
+		})
+	}
 
+	// Limit the number of messages
 	if len(allMessages) > limit {
 		allMessages = allMessages[:limit]
 	}
@@ -250,75 +298,57 @@ func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, 
 	return producer.Produce(msg, nil)
 }
 
-// DeleteAndRecreateTopic deletes all messages from a topic
+// DeleteAndRecreateTopic deletes and recreates a topic
 func (k *KafkaClient) DeleteAndRecreateTopic(topic string) error {
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": k.broker})
+	log.Printf("Attempting to delete and recreate topic: %s", topic)
+
+	// First, delete the topic
+	if err := k.DeleteTopic(topic); err != nil {
+		log.Printf("Error deleting topic: %v", err)
+		return fmt.Errorf("failed to delete topic: %v", err)
+	}
+
+	// Wait a moment for the deletion to propagate
+	time.Sleep(2 * time.Second)
+
+	// Create the topic with proper configuration
+	log.Printf("Creating topic: %s with 1 partition and replication factor 1", topic)
+	if err := k.CreateTopic(topic, 1, 1); err != nil {
+		log.Printf("Error creating topic: %v", err)
+		return fmt.Errorf("failed to create topic: %v", err)
+	}
+
+	// Wait a moment for the creation to propagate
+	time.Sleep(2 * time.Second)
+
+	// Verify the topic was created properly
+	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
+		"bootstrap.servers":     k.broker,
+		"broker.address.family": "v4",
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create admin client: %v", err)
 	}
 	defer admin.Close()
 
-	// Step 1: Get topic metadata first
-	metadata, err := admin.GetMetadata(&topic, false, 5000)
+	// Get topic metadata
+	md, err := admin.GetMetadata(&topic, false, 5000)
 	if err != nil {
-		return fmt.Errorf("failed to get metadata for topic %s: %v", topic, err)
+		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
-	topicMeta, ok := metadata.Topics[topic]
-	if !ok {
-		return fmt.Errorf("topic %s does not exist", topic)
+	if len(md.Topics) == 0 || len(md.Topics[topic].Partitions) == 0 {
+		return fmt.Errorf("topic %s was not created properly", topic)
 	}
 
-	numPartitions := len(topicMeta.Partitions)
-	// Assume replication factor is the number of replicas for partition 0
-	replicationFactor := len(topicMeta.Partitions[0].Replicas)
-
-	fmt.Printf("Deleting topic %s (partitions=%d, replication.factor=%d)\n", topic, numPartitions, replicationFactor)
-
-	// Step 2: Delete topic
-	deleteRes, err := admin.DeleteTopics(
-		context.Background(),
-		[]string{topic},
-		kafka.SetAdminOperationTimeout(10*1000),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to delete topic %s: %v", topic, err)
-	}
-	for _, res := range deleteRes {
-		if res.Error.Code() != kafka.ErrNoError {
-			return fmt.Errorf("delete topic error: %v", res.Error)
+	// Verify each partition has a leader
+	for _, p := range md.Topics[topic].Partitions {
+		if p.Leader == -1 {
+			return fmt.Errorf("partition %d has no leader", p.ID)
 		}
 	}
 
-	// Step 3: Wait for deletion to propagate
-	time.Sleep(5 * time.Second)
-
-	// Step 4: Recreate topic with same partitions and replication factor
-	newTopic := kafka.TopicSpecification{
-		Topic:             topic,
-		NumPartitions:     numPartitions,
-		ReplicationFactor: replicationFactor,
-		// Optionally add Configs here (retention.ms, cleanup.policy, etc.)
-		// Config: map[string]string{
-		// 	"retention.ms": "604800000", // example: 7 days
-		// },
-	}
-
-	createRes, err := admin.CreateTopics(
-		context.Background(),
-		[]kafka.TopicSpecification{newTopic},
-		kafka.SetAdminOperationTimeout(10*1000),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to recreate topic %s: %v", topic, err)
-	}
-	for _, res := range createRes {
-		if res.Error.Code() != kafka.ErrNoError {
-			return fmt.Errorf("recreate topic error: %v", res.Error)
-		}
-	}
-
-	fmt.Printf("Topic %s successfully recreated.\n", topic)
+	log.Printf("Successfully recreated topic: %s", topic)
 	return nil
 }
 
@@ -662,65 +692,30 @@ func (k *KafkaClient) GetTopics() ([]Topic, error) {
 	return topics, nil
 }
 
-// CheckConnection verifies if the Kafka broker is accessible
+// CheckConnection verifies if the connection to Kafka is working
 func (k *KafkaClient) CheckConnection() error {
-	log.Printf("Attempting to connect to Kafka broker: %s", k.broker)
-
-	// Validate broker address format
-	if !strings.Contains(k.broker, ":") {
-		return fmt.Errorf("invalid broker address format: %s (expected host:port)", k.broker)
-	}
-
-	// Split host and port
-	parts := strings.Split(k.broker, ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid broker address format: %s (expected host:port)", k.broker)
-	}
-
-	// Try to parse port
-	port, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return fmt.Errorf("invalid port number in broker address: %s", k.broker)
-	}
-
-	// Validate port range
-	if port < 1 || port > 65535 {
-		return fmt.Errorf("port number out of range (1-65535): %d", port)
-	}
-
-	// Create admin client with the specified broker
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
+	log.Printf("Checking connection to Kafka broker: %s", k.broker)
+	config := &kafka.ConfigMap{
 		"bootstrap.servers":        k.broker,
-		"client.id":                "connection-check",
+		"client.id":                "kafka-ui-connection-check",
 		"socket.timeout.ms":        5000,
+		"broker.address.family":    "v4", // Force IPv4
 		"socket.keepalive.enable":  true,
 		"reconnect.backoff.ms":     100,
 		"reconnect.backoff.max.ms": 1000,
 		"retries":                  3,
-	})
+	}
+
+	admin, err := kafka.NewAdminClient(config)
 	if err != nil {
 		return fmt.Errorf("failed to create admin client: %v", err)
 	}
 	defer admin.Close()
 
-	// Try to get metadata with a timeout
+	// Try to get metadata to verify connection
 	_, err = admin.GetMetadata(nil, false, 5000)
 	if err != nil {
-		// Check for specific error types
-		switch err.(type) {
-		case kafka.Error:
-			kafkaErr := err.(kafka.Error)
-			switch kafkaErr.Code() {
-			case kafka.ErrTransport:
-				return fmt.Errorf("connection refused to Kafka broker %s: %v", k.broker, err)
-			case kafka.ErrTimedOut:
-				return fmt.Errorf("connection timeout to Kafka broker %s: %v", k.broker, err)
-			default:
-				return fmt.Errorf("failed to connect to Kafka broker %s: %v", k.broker, err)
-			}
-		default:
-			return fmt.Errorf("failed to connect to Kafka broker %s: %v", k.broker, err)
-		}
+		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
 	log.Printf("Successfully connected to Kafka broker: %s", k.broker)

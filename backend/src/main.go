@@ -19,11 +19,20 @@ func main() {
 	// Get Kafka broker address from environment variable or use default
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 	if kafkaBroker == "" {
-		kafkaBroker = "localhost:9092"
+		kafkaBroker = "127.0.0.1:9093" // Use explicit IPv4 address
 	}
+	log.Printf("Using Kafka broker: %s", kafkaBroker)
 
 	// Initialize Kafka service
 	kafkaClient := kafka.NewKafkaClient(kafkaBroker)
+
+	// Test connection immediately
+	if err := kafkaClient.CheckConnection(); err != nil {
+		log.Printf("Warning: Initial Kafka connection test failed: %v", err)
+	} else {
+		log.Printf("Successfully connected to Kafka broker: %s", kafkaBroker)
+	}
+
 	api.Initialize(kafkaClient)
 
 	r := gin.Default()
