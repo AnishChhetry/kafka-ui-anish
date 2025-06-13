@@ -18,11 +18,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Get Kafka broker address from environment variable
-	kafkaBroker := os.Getenv("KAFKA_BROKER")
-	if kafkaBroker == "" {
-		log.Fatal("KAFKA_BROKER environment variable must be set")
-	}
+	kafkaBroker := ""
 
 	// Initialize Kafka service
 	kafkaClient := kafka.NewKafkaClient(kafkaBroker)
