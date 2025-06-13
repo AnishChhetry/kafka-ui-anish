@@ -13,32 +13,28 @@ import (
 )
 
 func main() {
-	// Set Gin mode to debug
-	gin.SetMode(gin.DebugMode)
+	// Set Gin mode to release in production
+	if os.Getenv("GIN_MODE") == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
-	// Get Kafka broker address from environment variable or use default
+	// Get Kafka broker address from environment variable
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 	if kafkaBroker == "" {
-		kafkaBroker = "127.0.0.1:9093" // Use explicit IPv4 address
+		log.Fatal("KAFKA_BROKER environment variable must be set")
 	}
-	log.Printf("Using Kafka broker: %s", kafkaBroker)
 
 	// Initialize Kafka service
 	kafkaClient := kafka.NewKafkaClient(kafkaBroker)
-
-	// Test connection immediately
 	if err := kafkaClient.CheckConnection(); err != nil {
 		log.Printf("Warning: Initial Kafka connection test failed: %v", err)
-	} else {
-		log.Printf("Successfully connected to Kafka broker: %s", kafkaBroker)
 	}
 
+	// Initialize API and middleware
 	api.Initialize(kafkaClient)
+	middleware.SetKafkaService(kafkaClient)
 
 	r := gin.Default()
-
-	// Add request logging
-	r.Use(gin.Logger())
 
 	// Configure CORS
 	config := cors.DefaultConfig()
@@ -52,6 +48,7 @@ func main() {
 
 	apiRoutes := r.Group("/api")
 	apiRoutes.Use(middleware.JWTMiddleware())
+	apiRoutes.Use(middleware.BootstrapMiddleware())
 	{
 		apiRoutes.GET("/check-connection", api.CheckConnection)
 		apiRoutes.GET("/topics", api.GetTopics)

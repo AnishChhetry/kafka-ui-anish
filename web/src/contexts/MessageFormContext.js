@@ -68,9 +68,10 @@ export const MessageFormProvider = ({ children }) => {
     addHeader,
     removeHeader,
     resetForm,
-    formRef
+    formRef,
+    setFormData
   }), [formData, handleKeyChange, handlePartitionChange, handleValueChange, 
-      handleHeaderChange, addHeader, removeHeader, resetForm]);
+      handleHeaderChange, addHeader, removeHeader, resetForm, setFormData]);
 
   return (
     <MessageFormContext.Provider value={value}>

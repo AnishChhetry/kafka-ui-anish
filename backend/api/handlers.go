@@ -2,11 +2,8 @@ package api
 
 import (
 	"backend/kafka"
-	"fmt"
-	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,30 +15,7 @@ func Initialize(service kafka.KafkaService) {
 	kafkaService = service
 }
 
-// UpdateBootstrapServer updates the bootstrap server for the Kafka service
-func UpdateBootstrapServer(bootstrapServer string) {
-	log.Printf("UpdateBootstrapServer called with: %s", bootstrapServer)
-
-	// If the server is localhost, use 127.0.0.1 instead
-	if strings.HasPrefix(bootstrapServer, "localhost:") {
-		port := strings.Split(bootstrapServer, ":")[1]
-		bootstrapServer = "127.0.0.1:" + port
-		log.Printf("Converted localhost to 127.0.0.1: %s", bootstrapServer)
-	}
-
-	// Create a new Kafka client with the updated broker address
-	newClient := kafka.NewKafkaClient(bootstrapServer)
-	// Update the global kafkaService with the new client
-	kafkaService = newClient
-	log.Printf("Kafka client updated with new broker: %s", bootstrapServer)
-}
-
 func GetTopics(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	topics, err := kafkaService.ListTopics()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -51,38 +25,20 @@ func GetTopics(c *gin.Context) {
 }
 
 func GetMessages(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	topic := c.Param("name")
 	limitStr := c.DefaultQuery("limit", "5")
 	limit, _ := strconv.Atoi(limitStr)
 	sortOrder := c.DefaultQuery("sort", "newest")
 
-	log.Printf("Attempting to fetch messages for topic: %s with limit: %d and sort: %s", topic, limit, sortOrder)
-
 	messages, err := kafkaService.FetchMessages(topic, limit, sortOrder)
 	if err != nil {
-		log.Printf("Error fetching messages: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   err.Error(),
-			"details": fmt.Sprintf("Failed to fetch messages for topic %s: %v", topic, err),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	log.Printf("Successfully fetched %d messages for topic: %s", len(messages), topic)
 	c.JSON(http.StatusOK, messages)
 }
 
 func ProduceMessage(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	type reqBody struct {
 		Topic     string `json:"topic"`
 		Key       string `json:"key,omitempty"`
@@ -122,38 +78,15 @@ func ProduceMessage(c *gin.Context) {
 }
 
 func DeleteMessages(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	topic := c.Param("name")
-	log.Printf("Attempting to delete messages for topic: %s", topic)
-
 	if err := kafkaService.DeleteAndRecreateTopic(topic); err != nil {
-		log.Printf("Error deleting messages: %v", err)
-		if strings.Contains(err.Error(), "topic does not exist") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
-		if strings.Contains(err.Error(), "messages still exist") {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete messages: " + err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete messages: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	log.Printf("Successfully deleted messages for topic: %s", topic)
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func DeleteTopic(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	topic := c.Param("name")
 	if err := kafkaService.DeleteTopic(topic); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -163,11 +96,6 @@ func DeleteTopic(c *gin.Context) {
 }
 
 func CreateTopic(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	type reqBody struct {
 		Name              string `json:"name"`
 		Partitions        int    `json:"partitions"`
@@ -191,7 +119,6 @@ func CreateTopic(c *gin.Context) {
 	}
 
 	if err := kafkaService.CreateTopic(body.Name, body.Partitions, body.ReplicationFactor); err != nil {
-		log.Printf("Error creating topic: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -199,11 +126,6 @@ func CreateTopic(c *gin.Context) {
 }
 
 func GetPartitionInfo(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	topic := c.Param("name")
 	partitions, err := kafkaService.GetPartitionInfo(topic)
 	if err != nil {
@@ -214,11 +136,6 @@ func GetPartitionInfo(c *gin.Context) {
 }
 
 func GetBrokers(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	brokers, err := kafkaService.GetBrokers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -228,11 +145,6 @@ func GetBrokers(c *gin.Context) {
 }
 
 func GetConsumers(c *gin.Context) {
-	bootstrapServer := c.Query("bootstrapServer")
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
-	}
-
 	consumers, err := kafkaService.GetConsumers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -243,32 +155,20 @@ func GetConsumers(c *gin.Context) {
 
 func CheckConnection(c *gin.Context) {
 	bootstrapServer := c.Query("bootstrapServer")
-	log.Printf("CheckConnection received bootstrapServer: %s", bootstrapServer)
-
-	if bootstrapServer != "" {
-		UpdateBootstrapServer(bootstrapServer)
+	if bootstrapServer == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bootstrapServer parameter is required"})
+		return
 	}
 
-	if client, ok := kafkaService.(*kafka.KafkaClient); ok {
-		err := client.CheckConnection()
-		if err != nil {
-			log.Printf("Connection check failed: %v", err)
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error":     err.Error(),
-				"connected": false,
-			})
-			return
-		}
-		log.Printf("Connection check successful for broker: %s", bootstrapServer)
-		c.JSON(http.StatusOK, gin.H{
-			"connected": true,
-			"message":   "Successfully connected to Kafka broker",
-		})
-	} else {
-		log.Printf("Invalid Kafka client type")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":     "Invalid Kafka client type",
-			"connected": false,
-		})
+	// Create a new Kafka client with the provided bootstrap server
+	client := kafka.NewKafkaClient(bootstrapServer)
+	if err := client.CheckConnection(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
+	// Update the global kafkaService with the new client
+	kafkaService = client
+
+	c.JSON(http.StatusOK, gin.H{"status": "connected"})
 }

@@ -6,6 +6,9 @@ import (
 
 // KafkaService defines the interface for all Kafka operations
 type KafkaService interface {
+	// Connection Operations
+	CheckConnection() error
+
 	// Topic Operations
 	ListTopics() ([]Topic, error)
 	CreateTopic(name string, partitions, replicationFactor int) error

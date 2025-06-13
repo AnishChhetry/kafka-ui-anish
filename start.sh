@@ -10,6 +10,9 @@ cleanup() {
 # Set up trap for cleanup on script termination
 trap cleanup SIGINT SIGTERM
 
+# Set Kafka broker environment variable
+export KAFKA_BROKER="localhost:9092"
+
 # Start the backend
 echo "Starting backend..."
 cd backend

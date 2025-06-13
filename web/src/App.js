@@ -127,7 +127,10 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      const res = await API.get('/brokers');
+      const bootstrapServer = localStorage.getItem('bootstrapServer');
+      const res = await API.get('/brokers', {
+        params: { bootstrapServer }
+      });
       setBrokers(res.data);
     } catch (err) {
       setError('Error fetching brokers: ' + err.message);
@@ -140,7 +143,10 @@ function App() {
     try {
       setLoading(true);
       setError(null);
-      const res = await API.get('/consumers');
+      const bootstrapServer = localStorage.getItem('bootstrapServer');
+      const res = await API.get('/consumers', {
+        params: { bootstrapServer }
+      });
       setConsumers(res.data || []);
     } catch (err) {
       setError('Error fetching consumers: ' + err.message);
@@ -152,13 +158,18 @@ function App() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
+    const bootstrapServer = localStorage.getItem('bootstrapServer');
+    
+    if (token && bootstrapServer) {
       API.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
-      API.get('/topics')
+      API.get('/topics', {
+        params: { bootstrapServer }
+      })
         .then(() => {
           setIsLoggedIn(true);
           setLoginOpen(false);
+          setIsConfigured(true);
           return Promise.all([
             fetchTopics(),
             fetchBrokers(),
@@ -176,6 +187,7 @@ function App() {
     } else {
       setIsLoggedIn(false);
       setLoginOpen(true);
+      setIsConfigured(false);
     }
   }, []);
 

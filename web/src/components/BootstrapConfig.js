@@ -22,9 +22,6 @@ export const BootstrapConfig = ({ onConfigChange }) => {
     const savedServer = localStorage.getItem('bootstrapServer');
     if (savedServer) {
       setBootstrapServer(savedServer);
-    } else {
-      // Set default bootstrap server
-      setBootstrapServer('localhost:9092');
     }
   }, []);
 
@@ -50,7 +47,7 @@ export const BootstrapConfig = ({ onConfigChange }) => {
         params: { bootstrapServer }
       });
       
-      if (response.data.connected) {
+      if (response.data.status === 'connected') {
         setSuccess(true);
         // Save to localStorage
         localStorage.setItem('bootstrapServer', bootstrapServer);

@@ -529,7 +529,7 @@ func (k *KafkaClient) GetConsumers() ([]ConsumerGroupInfo, error) {
 	dockerCmd := exec.Command(
 		"docker", "exec", "kafka-docker-kafka-1",
 		"kafka-consumer-groups",
-		"--bootstrap-server", "kafka:9092",
+		"--bootstrap-server", k.broker,
 		"--all-groups", "--describe",
 	)
 
@@ -544,7 +544,7 @@ func (k *KafkaClient) GetConsumers() ([]ConsumerGroupInfo, error) {
 	// If Docker command failed, try local Kafka
 	localCmd := exec.Command(
 		"/Users/anishchhetry/Documents/Kafka/kafka-repo/bin/kafka-consumer-groups.sh",
-		"--bootstrap-server", "localhost:9092",
+		"--bootstrap-server", k.broker,
 		"--all-groups", "--describe",
 	)
 

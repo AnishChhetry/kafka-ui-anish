@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Paper,
   Typography,
@@ -23,15 +23,24 @@ export const ProduceMessageForm = React.memo(({
   sendMessage,
   partitions
 }) => {
+  const [showHeaders, setShowHeaders] = useState(false);
   const {
     formData,
     handleKeyChange,
     handlePartitionChange,
     handleValueChange,
     handleHeaderChange,
-    addHeader,
-    removeHeader
+    removeHeader,
+    setFormData
   } = React.useContext(MessageFormContext);
+
+  // Initialize headers as empty when component mounts
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      headers: []
+    }));
+  }, [setFormData]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -39,6 +48,22 @@ export const ProduceMessageForm = React.memo(({
       sendMessage(formData);
     }
   }, [sendMessage, formData]);
+
+  const handleAddHeader = useCallback(() => {
+    setShowHeaders(true);
+    setFormData(prev => ({
+      ...prev,
+      headers: [...prev.headers, { key: '', value: '' }]
+    }));
+  }, [setFormData]);
+
+  const handleHideHeaders = useCallback(() => {
+    setShowHeaders(false);
+    setFormData(prev => ({
+      ...prev,
+      headers: []
+    }));
+  }, [setFormData]);
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -83,45 +108,73 @@ export const ProduceMessageForm = React.memo(({
           placeholder="Optional"
         />
 
-        <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle2">Headers</Typography>
+        {showHeaders && (
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle2">Headers</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddHeader}
+                >
+                  Add Header
+                </Button>
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={handleHideHeaders}
+                >
+                  Remove Headers
+                </Button>
+              </Box>
+            </Box>
+            {formData.headers.map((header, index) => (
+              <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <TextField
+                  size="small"
+                  label="Header Key"
+                  value={header.key}
+                  onChange={(e) => handleHeaderChange(index, 'key', e.target.value)}
+                  sx={{ flex: 1 }}
+                  placeholder="Optional"
+                />
+                <TextField
+                  size="small"
+                  label="Header Value"
+                  value={header.value}
+                  onChange={(e) => handleHeaderChange(index, 'value', e.target.value)}
+                  sx={{ flex: 1 }}
+                  placeholder="Optional"
+                />
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    removeHeader(index);
+                    if (formData.headers.length === 1) {
+                      handleHideHeaders();
+                    }
+                  }}
+                  sx={{ alignSelf: 'center' }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        {!showHeaders && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               size="small"
               startIcon={<AddIcon />}
-              onClick={addHeader}
+              onClick={handleAddHeader}
             >
               Add Header
             </Button>
           </Box>
-          {formData.headers.map((header, index) => (
-            <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <TextField
-                size="small"
-                label="Header Key"
-                value={header.key}
-                onChange={(e) => handleHeaderChange(index, 'key', e.target.value)}
-                sx={{ flex: 1 }}
-                placeholder="Optional"
-              />
-              <TextField
-                size="small"
-                label="Header Value"
-                value={header.value}
-                onChange={(e) => handleHeaderChange(index, 'value', e.target.value)}
-                sx={{ flex: 1 }}
-                placeholder="Optional"
-              />
-              <IconButton
-                size="small"
-                onClick={() => removeHeader(index)}
-                sx={{ alignSelf: 'center' }}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </Box>
-          ))}
-        </Box>
+        )}
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
