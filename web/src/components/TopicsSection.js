@@ -44,6 +44,7 @@ export const TopicsSection = ({
 }) => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [partitionCount, setPartitionCount] = useState(1);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchPartitionInfo = async () => {
@@ -67,6 +68,10 @@ export const TopicsSection = ({
       await onSendMessage(formData);
     } catch (err) {
       console.error('Error sending message:', err);
+      // Show error in a more user-friendly way
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to send message';
+      setError(errorMessage);
+      // You might want to add a snackbar or toast notification here
     }
   }, [selectedTopic, onSendMessage]);
 

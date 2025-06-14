@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"backend/api"
-	"backend/kafka"
 	"backend/middleware"
 
 	"github.com/gin-contrib/cors"
@@ -18,17 +17,9 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	kafkaBroker := ""
-
-	// Initialize Kafka service
-	kafkaClient := kafka.NewKafkaClient(kafkaBroker)
-	if err := kafkaClient.CheckConnection(); err != nil {
-		log.Printf("Warning: Initial Kafka connection test failed: %v", err)
-	}
-
 	// Initialize API and middleware
-	api.Initialize(kafkaClient)
-	middleware.SetKafkaService(kafkaClient)
+	api.Initialize(nil)             // Initialize with nil since we don't have a default broker
+	middleware.SetKafkaService(nil) // Set nil initially
 
 	r := gin.Default()
 
@@ -40,8 +31,10 @@ func main() {
 	config.AllowCredentials = true
 	r.Use(cors.New(config))
 
+	// Public routes (no bootstrap server required)
 	r.POST("/api/login", api.Login)
 
+	// Protected routes that require bootstrap server configuration
 	apiRoutes := r.Group("/api")
 	apiRoutes.Use(middleware.JWTMiddleware())
 	apiRoutes.Use(middleware.BootstrapMiddleware())

@@ -40,12 +40,15 @@ This project provides a web-based UI for managing and monitoring Apache Kafka cl
 - **Authentication:** JWT-based, user data stored in `backend/data/users.csv`.
 - **Kafka Integration:** Uses `confluent-kafka-go` for all Kafka operations.
 - **Config:**
-  - Kafka broker address via `KAFKA_BROKER` env var (default: `127.0.0.1:9092`)
   - Server port via `PORT` env var (default: `8080`)
+  - Kafka broker address is configured dynamically via `bootstrapServer` query parameter
+  - CORS is configured to allow requests from `http://localhost:3000`
+  - Protected routes require JWT authentication and bootstrap server configuration
 
 ## Frontend (React)
 - **Main Features:**
   - Login/logout with JWT
+  - Dynamic Kafka broker configuration
   - View, create, and delete topics
   - View and produce messages
   - View brokers and consumers
@@ -60,7 +63,7 @@ This project provides a web-based UI for managing and monitoring Apache Kafka cl
 ### Prerequisites
 - Go 1.24+
 - Node.js 18+
-- Kafka cluster running (default: `127.0.0.1:9092`)
+- Kafka cluster (broker address will be configured through the UI)
 
 ### Backend
 ```sh
@@ -82,6 +85,12 @@ npm start
 ### Default Credentials
 - Username: `admin`
 - Password: `password`
+
+### Configuration
+1. Start both backend and frontend
+2. Login with default credentials
+3. Configure Kafka broker address in the UI (e.g., `localhost:9092`)
+4. Start using the application
 
 ### Changing Password
 - Use the UI or call `/api/change-password` (JWT required)

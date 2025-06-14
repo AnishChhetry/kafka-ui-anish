@@ -160,30 +160,26 @@ function App() {
     const token = localStorage.getItem('token');
     const bootstrapServer = localStorage.getItem('bootstrapServer');
     
-    if (token && bootstrapServer) {
+    if (token) {
       API.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setIsLoggedIn(true);
+      setLoginOpen(false);
       
-      API.get('/topics', {
-        params: { bootstrapServer }
-      })
-        .then(() => {
-          setIsLoggedIn(true);
-          setLoginOpen(false);
-          setIsConfigured(true);
-          return Promise.all([
-            fetchTopics(),
-            fetchBrokers(),
-            fetchConsumers()
-          ]);
-        })
-        .catch(err => {
-          console.error('Error verifying token:', err);
-          localStorage.removeItem('token');
-          delete API.defaults.headers.common['Authorization'];
-          setIsLoggedIn(false);
-          setLoginOpen(true);
-          setError('Session expired. Please log in again.');
+      if (bootstrapServer) {
+        setIsConfigured(true);
+        // Only fetch data if we have a bootstrap server
+        Promise.all([
+          fetchTopics(),
+          fetchBrokers(),
+          fetchConsumers()
+        ]).catch(err => {
+          console.error('Error fetching initial data:', err);
+          setError('Failed to fetch data. Please check your bootstrap server configuration.');
         });
+      } else {
+        setIsConfigured(false);
+        setSelectedSection('config');
+      }
     } else {
       setIsLoggedIn(false);
       setLoginOpen(true);
@@ -215,11 +211,20 @@ function App() {
       API.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setIsLoggedIn(true);
       setLoginOpen(false);
-      await Promise.all([
-        fetchTopics(),
-        fetchBrokers(),
-        fetchConsumers()
-      ]);
+      
+      // Check if bootstrap server is configured
+      const bootstrapServer = localStorage.getItem('bootstrapServer');
+      if (bootstrapServer) {
+        setIsConfigured(true);
+        await Promise.all([
+          fetchTopics(),
+          fetchBrokers(),
+          fetchConsumers()
+        ]);
+      } else {
+        setIsConfigured(false);
+        setSelectedSection('config');
+      }
     } catch (err) {
       setLoginError('Invalid username or password');
       handleLogout();
@@ -405,7 +410,8 @@ function App() {
             }}
           >
             <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6" color="primary">Kafka UI</Typography>
+              
+            <img src="/logo_black.png" alt="Kafka UI Logo" style={{ height: '100px', width: '110px' }} />
               <Box>
                 <IconButton onClick={() => setChangePasswordOpen(true)} color="inherit" size="small" sx={{ mr: 1 }}>
                   <SettingsIcon />
@@ -583,9 +589,10 @@ function App() {
       {/* Login Dialog */}
       <Dialog 
         open={!isLoggedIn && loginOpen} 
-        onClose={() => setLoginOpen(false)}
+        onClose={() => {}}  // Prevent closing
         disableEnforceFocus
         disableAutoFocus
+        disableEscapeKeyDown
         sx={{ zIndex: 1400 }}
       >
         <DialogTitle>Login</DialogTitle>

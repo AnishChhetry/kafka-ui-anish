@@ -270,9 +270,22 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 
 // Produce sends a message to the given Kafka topic
 func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, headers []MessageHeader) error {
-	producer, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": k.broker})
+	config := &kafka.ConfigMap{
+		"bootstrap.servers":       k.broker,
+		"client.id":               "kafka-ui-producer",
+		"socket.timeout.ms":       5000,
+		"broker.address.family":   "v4",
+		"socket.keepalive.enable": true,
+		"retries":                 3,
+		"retry.backoff.ms":        100,
+		"message.timeout.ms":      5000,
+		"acks":                    "all", // Wait for all replicas to acknowledge
+		"enable.idempotence":      true,  // Prevent duplicate messages
+	}
+
+	producer, err := kafka.NewProducer(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create producer: %v", err)
 	}
 	defer producer.Close()
 
@@ -295,7 +308,24 @@ func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, 
 		Headers: kafkaHeaders,
 	}
 
-	return producer.Produce(msg, nil)
+	// Create a delivery channel
+	deliveryChan := make(chan kafka.Event, 1)
+
+	// Produce the message
+	err = producer.Produce(msg, deliveryChan)
+	if err != nil {
+		return fmt.Errorf("failed to produce message: %v", err)
+	}
+
+	// Wait for delivery report
+	ev := <-deliveryChan
+	msgEvent := ev.(*kafka.Message)
+
+	if msgEvent.TopicPartition.Error != nil {
+		return fmt.Errorf("delivery failed: %v", msgEvent.TopicPartition.Error)
+	}
+
+	return nil
 }
 
 // DeleteAndRecreateTopic deletes and recreates a topic
