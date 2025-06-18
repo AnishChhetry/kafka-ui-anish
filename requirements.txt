@@ -1,0 +1,174 @@
+# Kafka UI Project - System Requirements
+# Compatible with macOS and Windows
+
+# =============================================================================
+# SYSTEM REQUIREMENTS
+# =============================================================================
+
+# Operating Systems:
+# - macOS 10.15+ (Catalina or later)
+# - Windows 10/11 (64-bit)
+# - Linux (Ubuntu 18.04+, CentOS 7+, etc.)
+
+# =============================================================================
+# BACKEND REQUIREMENTS (Go)
+# =============================================================================
+
+# Go Programming Language
+# Version: 1.24.1 or later
+# Download: https://golang.org/dl/
+# Installation:
+#   macOS: brew install go
+#   Windows: Download installer from golang.org/dl/
+
+# Go Dependencies (automatically managed via go.mod):
+# - github.com/confluentinc/confluent-kafka-go/v2 v2.10.1
+# - github.com/gin-contrib/cors v1.7.5
+# - github.com/gin-gonic/gin v1.10.1
+# - github.com/golang-jwt/jwt/v5 v5.2.2
+
+# =============================================================================
+# FRONTEND REQUIREMENTS (Node.js)
+# =============================================================================
+
+# Node.js
+# Version: 18.0.0 or later (LTS recommended)
+# Download: https://nodejs.org/
+# Installation:
+#   macOS: brew install node
+#   Windows: Download installer from nodejs.org/
+
+# npm (comes with Node.js)
+# Version: 8.0.0 or later
+
+# Node.js Dependencies (automatically managed via package.json):
+# - React 19.1.0
+# - Material-UI 7.1.1
+# - Axios 1.9.0
+# - React JSON View 1.21.3
+
+# =============================================================================
+# KAFKA REQUIREMENTS
+# =============================================================================
+
+# Apache Kafka Cluster
+# Version: 2.8.0 or later (recommended)
+# Options:
+#   1. Local Kafka installation
+#   2. Cloud Kafka service (AWS MSK, Confluent Cloud, etc.)
+#   3. Docker Kafka container
+#   4. Remote Kafka cluster
+
+# Kafka Broker Address
+# Format: hostname:port (e.g., localhost:9092)
+# Must be accessible from the application
+
+# =============================================================================
+# DEVELOPMENT TOOLS (Optional but Recommended)
+# =============================================================================
+
+# Git
+# Version: 2.30.0 or later
+# Installation:
+#   macOS: brew install git
+#   Windows: Download from git-scm.com/
+
+# Code Editor
+# - Visual Studio Code (recommended)
+# - GoLand (for Go development)
+# - WebStorm (for React development)
+
+# =============================================================================
+# PORTS REQUIRED
+# =============================================================================
+
+# Backend API Server: 8080 (configurable via PORT environment variable)
+# Frontend Development Server: 3000
+# Kafka Broker: 9092 (default, may vary)
+
+# =============================================================================
+# ENVIRONMENT VARIABLES
+# =============================================================================
+
+# Optional Environment Variables:
+# - PORT: Backend server port (default: 8080)
+# - GIN_MODE: Gin framework mode (default: debug, set to "release" for production)
+
+# =============================================================================
+# INSTALLATION STEPS
+# =============================================================================
+
+# 1. Install Go 1.24.1+
+# 2. Install Node.js 18+
+# 3. Clone the repository
+# 4. Backend setup:
+#    cd backend
+#    go mod tidy
+# 5. Frontend setup:
+#    cd web
+#    npm install
+# 6. Start the application:
+#    - macOS/Linux: ./start.sh
+#    - Windows: start.bat
+
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+
+# Common Issues:
+# - Port conflicts: Change PORT environment variable
+# - Kafka connection: Ensure Kafka cluster is running and accessible
+# - CORS issues: Check if frontend is running on localhost:3000
+# - Permission issues: Run as administrator on Windows if needed
+
+# =============================================================================
+# SECURITY NOTES
+# =============================================================================
+
+# Default credentials:
+# - Username: admin
+# - Password: password
+# 
+# IMPORTANT: Change default password in production environments
+# User data is stored in: backend/data/users.csv
+
+# =============================================================================
+# PERFORMANCE REQUIREMENTS
+# =============================================================================
+
+# Minimum System Requirements:
+# - RAM: 4GB (8GB recommended)
+# - CPU: 2 cores (4 cores recommended)
+# - Storage: 1GB free space
+# - Network: Stable internet connection for Kafka cluster access
+
+# =============================================================================
+# BROWSER COMPATIBILITY
+# =============================================================================
+
+# Supported Browsers:
+# - Chrome 90+
+# - Firefox 88+
+# - Safari 14+
+# - Edge 90+
+
+# =============================================================================
+# VERSION COMPATIBILITY MATRIX
+# =============================================================================
+
+# Tested Combinations:
+# - Go 1.24.1 + Node.js 18.17.0 + Kafka 3.4.0
+# - Go 1.25.0 + Node.js 20.8.0 + Kafka 3.5.0
+# - Go 1.26.0 + Node.js 21.0.0 + Kafka 3.6.0
+
+# =============================================================================
+# DEPLOYMENT NOTES
+# =============================================================================
+
+# Production Deployment:
+# - Set GIN_MODE=release
+# - Use HTTPS in production
+# - Configure proper CORS settings
+# - Set up proper authentication
+# - Use environment variables for configuration
+# - Consider using Docker for containerization 
