@@ -18,8 +18,7 @@ This project provides a web-based UI for managing and monitoring Apache Kafka cl
 │   ├── src/         # Source code (components, contexts, main app)
 │   ├── public/      # Static assets
 │   └── ...          # Config files, dependencies
-├── start.sh         # Shell script to start backend and frontend
-├── start.bat        # Batch script to start backend and frontend (Windows)
+├── Makefile         # Cross-platform build commands
 └── README.md        # Project documentation
 ```
 
@@ -106,13 +105,7 @@ cd kafka-ui-anish-main
 
 #### 3. Quick Start (Recommended)
 
-**Option A: Using the provided Windows script**
-```cmd
-# Double-click start.bat or run in Command Prompt
-start.bat
-```
-
-**Option B: Manual startup**
+**Manual startup:**
 ```cmd
 # Terminal 1 - Backend
 cd backend
@@ -153,16 +146,7 @@ cd kafka-ui-anish-main
 
 #### 3. Quick Start (Recommended)
 
-**Option A: Using the provided shell script**
-```bash
-# Make the script executable (first time only)
-chmod +x start.sh
-
-# Run the startup script
-./start.sh
-```
-
-**Option B: Manual startup**
+**Manual startup:**
 ```bash
 # Terminal 1 - Backend
 cd backend
@@ -218,16 +202,7 @@ cd kafka-ui-anish-main
 
 #### 3. Quick Start (Recommended)
 
-**Option A: Using the provided shell script**
-```bash
-# Make the script executable (first time only)
-chmod +x start.sh
-
-# Run the startup script
-./start.sh
-```
-
-**Option B: Manual startup**
+**Manual startup:**
 ```bash
 # Terminal 1 - Backend
 cd backend
@@ -334,8 +309,7 @@ npm test
 ```
 
 ## Scripts
-- `start.sh` – Start both backend and frontend (Unix/macOS/Linux)
-- `start.bat` – Start both backend and frontend (Windows)
+- `Makefile` – Cross-platform build commands
 
 ## Quick Start
 
@@ -356,15 +330,7 @@ make help
 
 ### Option 2: Using Platform-Specific Scripts
 
-#### Windows
-```cmd
-start.bat
-```
-
-#### Linux/macOS
-```bash
-./start.sh
-```
+*This project does not include platform-specific startup scripts. Use the Makefile or manual instructions above.*
 
 ## Available Makefile Commands
 
@@ -491,8 +457,6 @@ kafka-ui-anish/
 ├── backend/          # Go backend server
 ├── web/             # React frontend
 ├── Makefile         # Cross-platform build commands
-├── start.sh         # Linux/macOS startup script
-├── start.bat        # Windows startup script
 └── README.md        # This file
 ```
 
@@ -504,6 +468,4 @@ kafka-ui-anish/
 4. Test with `make start`
 5. Submit a pull request
 
-## License
 
-[Add your license information here]
