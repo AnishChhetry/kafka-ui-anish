@@ -3,14 +3,13 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"log"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
@@ -19,19 +18,23 @@ var broker string
 // KafkaClient implements the KafkaService interface
 type KafkaClient struct {
 	broker string
+	admin  sarama.ClusterAdmin
 }
 
 // NewKafkaClient creates a new instance of KafkaClient
 func NewKafkaClient(brokerAddr string) *KafkaClient {
-	log.Printf("Creating new Kafka client with broker: %s", brokerAddr)
+	admin, err := sarama.NewClusterAdmin([]string{brokerAddr}, sarama.NewConfig())
+	if err != nil {
+		admin = nil
+	}
 	return &KafkaClient{
 		broker: brokerAddr,
+		admin:  admin,
 	}
 }
 
 // UpdateBroker updates the broker address
 func (k *KafkaClient) UpdateBroker(brokerAddr string) {
-	log.Printf("Updating Kafka broker to: %s", brokerAddr)
 	k.broker = brokerAddr
 }
 
@@ -59,9 +62,9 @@ func (k *KafkaClient) ListTopics() ([]Topic, error) {
 	topics := []Topic{}
 	for _, t := range md.Topics {
 		// Skip internal topics
-		if strings.HasPrefix(t.Topic, "__") {
-			continue
-		}
+		// if strings.HasPrefix(t.Topic, "__") {
+		// 	continue
+		// }
 
 		// Get partition information
 		partitions := []Partition{}
@@ -95,25 +98,20 @@ func (k *KafkaClient) ListTopics() ([]Topic, error) {
 
 // FetchMessages reads a limited number of messages from the given topic
 func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) ([]Message, error) {
-	log.Printf("Creating consumer for topic: %s with broker: %s", topic, k.broker)
-
-	config := &kafka.ConfigMap{
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":       k.broker,
 		"group.id":                fmt.Sprintf("temp-meta-%d", time.Now().UnixNano()),
 		"auto.offset.reset":       "earliest",
 		"broker.address.family":   "v4",
 		"socket.timeout.ms":       5000,
 		"socket.keepalive.enable": true,
-	}
-
-	consumer, err := kafka.NewConsumer(config)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create consumer: %v", err)
 	}
 	defer consumer.Close()
 
 	// Get topic metadata
-	log.Printf("Fetching metadata for topic: %s", topic)
 	metadata, err := consumer.GetMetadata(&topic, false, 5000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
@@ -125,7 +123,6 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 
 	// Get partition information
 	partitions := metadata.Topics[topic].Partitions
-	log.Printf("Found %d partitions for topic %s", len(partitions), topic)
 
 	msgChan := make(chan []Message, len(partitions))
 	errChan := make(chan error, len(partitions))
@@ -154,11 +151,9 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 			}
 			defer partitionConsumer.Close()
 
-			log.Printf("Querying watermark offsets for topic: %s, partition: %d", topic, partition.ID)
 			low, high, err := partitionConsumer.QueryWatermarkOffsets(topic, partition.ID, 5000)
 			if err != nil {
 				if err.(kafka.Error).Code() == kafka.ErrUnknownPartition {
-					log.Printf("Partition %d does not exist, skipping", partition.ID)
 					msgChan <- []Message{} // Send empty messages for non-existent partition
 					return
 				}
@@ -167,7 +162,6 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 			}
 
 			if low == high {
-				log.Printf("No messages in partition %d (low=%d, high=%d)", partition.ID, low, high)
 				msgChan <- []Message{} // Send empty messages for empty partition
 				return
 			}
@@ -183,7 +177,6 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 				Offset:    kafka.Offset(start),
 			}
 
-			log.Printf("Assigning partition %d for topic: %s", partition.ID, topic)
 			err = partitionConsumer.Assign([]kafka.TopicPartition{tp})
 			if err != nil {
 				errChan <- fmt.Errorf("partition %d: failed to assign partition: %v", partition.ID, err)
@@ -270,7 +263,7 @@ func (k *KafkaClient) FetchMessages(topic string, limit int, sortOrder string) (
 
 // Produce sends a message to the given Kafka topic
 func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, headers []MessageHeader) error {
-	config := &kafka.ConfigMap{
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":       k.broker,
 		"client.id":               "kafka-ui-producer",
 		"socket.timeout.ms":       5000,
@@ -281,9 +274,7 @@ func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, 
 		"message.timeout.ms":      5000,
 		"acks":                    "all", // Wait for all replicas to acknowledge
 		"enable.idempotence":      true,  // Prevent duplicate messages
-	}
-
-	producer, err := kafka.NewProducer(config)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create producer: %v", err)
 	}
@@ -330,11 +321,8 @@ func (k *KafkaClient) Produce(topic, key string, value []byte, partition int32, 
 
 // DeleteAndRecreateTopic deletes and recreates a topic
 func (k *KafkaClient) DeleteAndRecreateTopic(topic string) error {
-	log.Printf("Attempting to delete and recreate topic: %s", topic)
-
 	// First, delete the topic
 	if err := k.DeleteTopic(topic); err != nil {
-		log.Printf("Error deleting topic: %v", err)
 		return fmt.Errorf("failed to delete topic: %v", err)
 	}
 
@@ -342,9 +330,7 @@ func (k *KafkaClient) DeleteAndRecreateTopic(topic string) error {
 	time.Sleep(2 * time.Second)
 
 	// Create the topic with proper configuration
-	log.Printf("Creating topic: %s with 1 partition and replication factor 1", topic)
 	if err := k.CreateTopic(topic, 1, 1); err != nil {
-		log.Printf("Error creating topic: %v", err)
 		return fmt.Errorf("failed to create topic: %v", err)
 	}
 
@@ -378,7 +364,6 @@ func (k *KafkaClient) DeleteAndRecreateTopic(topic string) error {
 		}
 	}
 
-	log.Printf("Successfully recreated topic: %s", topic)
 	return nil
 }
 
@@ -458,14 +443,14 @@ type BrokerInfo struct {
 	Leaders      []int  `json:"leaders"`
 }
 
-// ConsumerGroupInfo struct for consumer group metadata
+// ConsumerGroupInfo struct for minimal group member info
+// Only GroupID, MemberID, Topics, Partitions, Error
 type ConsumerGroupInfo struct {
-	GroupID       string `json:"groupId"`
-	Topic         string `json:"topic"`
-	Partition     int32  `json:"partition"`
-	CurrentOffset int64  `json:"currentOffset"`
-	LogEndOffset  int64  `json:"logEndOffset"`
-	Lag           int64  `json:"lag"`
+	GroupID    string   `json:"groupId"`
+	MemberID   string   `json:"memberId"`
+	Topics     []string `json:"topics"`
+	Partitions []int32  `json:"partitions"`
+	Error      string   `json:"error"`
 }
 
 // GetBrokers returns a list of all brokers in the Kafka cluster
@@ -553,84 +538,48 @@ func (k *KafkaClient) GetBrokers() ([]BrokerInfo, error) {
 
 // GetConsumers gets information about consumer groups
 func (k *KafkaClient) GetConsumers() ([]ConsumerGroupInfo, error) {
-	fmt.Println("DEBUG: Starting GetConsumers function")
-
-	// Try Docker Kafka first
-	dockerCmd := exec.Command(
-		"docker", "exec", "kafka-docker-kafka-1",
-		"kafka-consumer-groups",
-		"--bootstrap-server", k.broker,
-		"--all-groups", "--describe",
-	)
-
-	fmt.Println("DEBUG: Trying Docker command:", dockerCmd.String())
-
-	dockerOutput, dockerErr := dockerCmd.CombinedOutput()
-	if dockerErr == nil {
-		// Docker command succeeded, process the output
-		return processConsumerGroupsOutput(string(dockerOutput))
+	if k.admin == nil {
+		return nil, fmt.Errorf("sarama admin client not initialized")
 	}
-
-	// If Docker command failed, try local Kafka
-	localCmd := exec.Command(
-		"/Users/anishchhetry/Documents/Kafka/kafka-repo/bin/kafka-consumer-groups.sh",
-		"--bootstrap-server", k.broker,
-		"--all-groups", "--describe",
-	)
-
-	fmt.Println("DEBUG: Trying local command:", localCmd.String())
-
-	localOutput, localErr := localCmd.CombinedOutput()
-	if localErr != nil {
-		fmt.Println("DEBUG: Both Docker and local commands failed")
-		fmt.Println("DEBUG: Docker error:", dockerErr)
-		fmt.Println("DEBUG: Local error:", localErr)
-		// If both commands fail but return no output, it likely means no consumer groups exist
-		if len(dockerOutput) == 0 && len(localOutput) == 0 {
-			fmt.Println("DEBUG: No output and both commands failed")
-			return []ConsumerGroupInfo{}, nil
-		}
-		return nil, fmt.Errorf("failed to run kafka-consumer-groups: Docker error: %v, Local error: %v", dockerErr, localErr)
+	groups, err := k.admin.ListConsumerGroups()
+	if err != nil {
+		return nil, err
 	}
-
-	// Process local command output
-	return processConsumerGroupsOutput(string(localOutput))
-}
-
-// processConsumerGroupsOutput processes the output from kafka-consumer-groups command
-func processConsumerGroupsOutput(output string) ([]ConsumerGroupInfo, error) {
-	lines := strings.Split(output, "\n")
-	var result []ConsumerGroupInfo
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "GROUP") || strings.HasPrefix(line, "Consumer group") {
-			continue // skip header or empty lines
+	var infos []ConsumerGroupInfo
+	for groupID := range groups {
+		desc, err := k.admin.DescribeConsumerGroups([]string{groupID})
+		if err != nil || len(desc) == 0 {
+			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 6 {
-			fmt.Println("DEBUG: Skipping line with insufficient fields:", line)
-			continue // not enough fields
+		cg := desc[0]
+		for _, member := range cg.Members {
+			assignment, err := member.GetMemberAssignment()
+			if err != nil {
+				infos = append(infos, ConsumerGroupInfo{
+					GroupID:    groupID,
+					MemberID:   member.MemberId,
+					Topics:     []string{},
+					Partitions: []int32{},
+					Error:      err.Error(),
+				})
+				continue
+			}
+			var topics []string
+			var partitions []int32
+			for topic, parts := range assignment.Topics {
+				topics = append(topics, topic)
+				partitions = append(partitions, parts...)
+			}
+			infos = append(infos, ConsumerGroupInfo{
+				GroupID:    groupID,
+				MemberID:   member.MemberId,
+				Topics:     topics,
+				Partitions: partitions,
+				Error:      "",
+			})
 		}
-		// Example output fields:
-		// GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG ...
-		groupId := fields[0]
-		topic := fields[1]
-		partition, _ := strconv.Atoi(fields[2])
-		currentOffset, _ := strconv.ParseInt(fields[3], 10, 64)
-		logEndOffset, _ := strconv.ParseInt(fields[4], 10, 64)
-		lag, _ := strconv.ParseInt(fields[5], 10, 64)
-		result = append(result, ConsumerGroupInfo{
-			GroupID:       groupId,
-			Topic:         topic,
-			Partition:     int32(partition),
-			CurrentOffset: currentOffset,
-			LogEndOffset:  logEndOffset,
-			Lag:           lag,
-		})
 	}
-
-	return result, nil
+	return infos, nil
 }
 
 // Global functions that use the default client
@@ -724,7 +673,6 @@ func (k *KafkaClient) GetTopics() ([]Topic, error) {
 
 // CheckConnection verifies if the connection to Kafka is working
 func (k *KafkaClient) CheckConnection() error {
-	log.Printf("Checking connection to Kafka broker: %s", k.broker)
 	config := &kafka.ConfigMap{
 		"bootstrap.servers":        k.broker,
 		"client.id":                "kafka-ui-connection-check",
@@ -748,6 +696,5 @@ func (k *KafkaClient) CheckConnection() error {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
-	log.Printf("Successfully connected to Kafka broker: %s", k.broker)
 	return nil
 }

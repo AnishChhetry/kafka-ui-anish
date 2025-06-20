@@ -1,9 +1,5 @@
 package kafka
 
-import (
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-)
-
 // KafkaService defines the interface for all Kafka operations
 type KafkaService interface {
 	// Connection Operations
@@ -92,17 +88,4 @@ func convertReplicas(replicas []int32) []int {
 		result[i] = int(r)
 	}
 	return result
-}
-
-// GetConsumerGroups returns a list of consumer groups for a topic
-func (k *KafkaClient) GetConsumerGroups(topic string) ([]ConsumerGroup, error) {
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": k.broker})
-	if err != nil {
-		return nil, err
-	}
-	defer admin.Close()
-
-	// For now, return an empty list since we can't easily get consumer groups
-	// This is a limitation of the confluent-kafka-go library
-	return []ConsumerGroup{}, nil
 }

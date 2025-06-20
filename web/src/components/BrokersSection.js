@@ -56,13 +56,13 @@ export const BrokersSection = ({ brokers, onRefresh }) => {
                   {/* <TableCell>{formatBytes(broker.segmentSize)}</TableCell> */}
                   <TableCell>{broker.segmentCount}</TableCell>
                   <TableCell>
-                    <Tooltip title={broker.replicas.join(', ')}>
-                      <Typography>{broker.replicas.length}</Typography>
+                    <Tooltip title={(broker.replicas || []).join(', ')}>
+                      <Typography>{(broker.replicas || []).length}</Typography>
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Tooltip title={broker.leaders.join(', ')}>
-                      <Typography>{broker.leaders.length}</Typography>
+                    <Tooltip title={(broker.leaders || []).join(', ')}>
+                      <Typography>{(broker.leaders || []).length}</Typography>
                     </Tooltip>
                   </TableCell>
                 </TableRow>

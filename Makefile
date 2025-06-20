@@ -12,6 +12,8 @@ help:
 	@echo "  make start-backend   - Start only the backend server"
 	@echo "  make start-frontend  - Start only the frontend server"
 	@echo "  make install-deps    - Install Go and Node.js dependencies"
+	@echo "  make install-backend-deps - Install backend dependencies"
+	@echo "  make install-frontend-deps - Install frontend dependencies"
 	@echo "  make install-go      - Install Go programming language"
 	@echo "  make install-nodejs  - Install Node.js and npm"
 	@echo "  make clean           - Clean up temporary files and node_modules"

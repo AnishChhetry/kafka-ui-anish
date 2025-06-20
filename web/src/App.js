@@ -10,7 +10,6 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  useTheme,
   IconButton,
   Dialog,
   DialogTitle,
@@ -21,14 +20,18 @@ import {
   Paper,
   Typography
 } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
   Storage as StorageIcon,
   Topic as TopicIcon,
   Group as GroupIcon,
   Logout as LogoutIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Brightness4 as Brightness4Icon,
+  Brightness7 as Brightness7Icon
 } from '@mui/icons-material';
+import Tooltip from '@mui/material/Tooltip';
 import API from './api';
 import { TopicsSection } from './components/TopicsSection';
 import { OverviewSection } from './components/OverviewSection';
@@ -40,7 +43,6 @@ import { ChangePasswordDialog } from './components/ChangePasswordDialog';
 const drawerWidth = 240;
 
 function App() {
-  const theme = useTheme();
   const [topics, setTopics] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('');
   const [messages, setMessages] = useState([]);
@@ -69,6 +71,17 @@ function App() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [currentToken, setCurrentToken] = useState(null);
   const [currentBootstrapServer, setCurrentBootstrapServer] = useState(null);
+  const [mode, setMode] = useState('light');
+  const colorMode = {
+    toggleColorMode: () => {
+      setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+    },
+  };
+  const theme = React.useMemo(() => createTheme({
+    palette: {
+      mode,
+    },
+  }), [mode]);
 
   const loadMessages = useCallback(async () => {
     if (!selectedTopic) return;
@@ -77,7 +90,6 @@ function App() {
       setError(null);
       const limit = messageLimit === 'all' ? 1000 : messageLimit;
       const res = await API.get(`/topics/${selectedTopic}/messages?limit=${limit}&sort=${sortOrder || 'newest'}`);
-      console.log('Raw message response:', res.data);
       
       const formattedMessages = Array.isArray(res.data) ? res.data.map((msg, index) => {
         const messageObj = typeof msg === 'string' ? { value: msg } : msg;
@@ -90,8 +102,6 @@ function App() {
         const timestamp = messageObj.timestamp ?? Date.now();
         const headers = messageObj.headers ?? [];
 
-        console.log('Processing message:', { messageObj, formatted: { offset, partition, key, value, size, timestamp, headers } });
-        
         return {
           offset,
           partition,
@@ -103,10 +113,8 @@ function App() {
         };
       }) : [];
       
-      console.log('Formatted messages:', formattedMessages);
       setMessages(formattedMessages);
     } catch (err) {
-      console.error('Error fetching messages:', err);
       setError('Error fetching messages: ' + err.message);
     } finally {
       setLoading(false);
@@ -295,10 +303,15 @@ function App() {
   const handleTopicChange = (topic) => {
     setSelectedTopic(topic);
     setMessages([]);
-    if (topic) {
+  };
+
+  // Load messages when selectedTopic, messageLimit, or sortOrder changes
+  useEffect(() => {
+    if (selectedTopic) {
       loadMessages();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTopic, messageLimit, sortOrder]);
 
   const handleMessageLimitChange = (event) => {
     setMessageLimit(event.target.value);
@@ -355,271 +368,289 @@ function App() {
   ];
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      height: '100vh',
-      position: 'relative',
-      zIndex: 0,
-      '& > *': {
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ 
+        display: 'flex', 
+        height: '100vh',
         position: 'relative',
-        zIndex: 1
-      }
-    }}>
-      {isLoggedIn ? (
-        <>
-          <Drawer
-            variant="permanent"
-            sx={{
-              width: drawerWidth,
-              flexShrink: 0,
-              '& .MuiDrawer-paper': {
+        zIndex: 0,
+        '& > *': {
+          position: 'relative',
+          zIndex: 1
+        }
+      }}>
+        {isLoggedIn ? (
+          <>
+            <Drawer
+              variant="permanent"
+              sx={{
                 width: drawerWidth,
-                boxSizing: 'border-box',
-                borderRight: `1px solid ${theme.palette.divider}`,
-                position: 'relative',
-                zIndex: 2
-              },
-            }}
-          >
-            <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              
-            <img src="/logo_black.png" alt="Kafka UI Logo" style={{ height: '100px', width: '110px' }} />
-              <Box>
-                <IconButton onClick={() => setChangePasswordOpen(true)} color="inherit" size="small" sx={{ mr: 1 }}>
-                  <SettingsIcon />
-                </IconButton>
-                <IconButton onClick={handleLogout} color="inherit" size="small">
-                  <LogoutIcon />
-                </IconButton>
+                flexShrink: 0,
+                '& .MuiDrawer-paper': {
+                  width: drawerWidth,
+                  boxSizing: 'border-box',
+                  borderRight: `1px solid ${theme.palette.divider}`,
+                  position: 'relative',
+                  zIndex: 2
+                },
+              }}
+            >
+              <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <img
+                  src={mode === 'dark' ? '/logo_white.png' : '/logo_black.png'}
+                  alt="Kafka UI Logo"
+                  style={{ height: '100px', width: '110px' }}
+                />
+                <Box>
+                  <Tooltip title="Change Password" placement="top">
+                    <IconButton onClick={() => setChangePasswordOpen(true)} color="inherit" size="small" sx={{ mr: 1 }}>
+                      <SettingsIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Logout" placement="top">
+                    <IconButton onClick={handleLogout} color="inherit" size="small">
+                      <LogoutIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </Box>
-            </Box>
-            <Divider />
-            <List>
-              {menuItems.map((item) => (
-                <ListItem key={item.id} disablePadding>
-                  <ListItemButton
-                    selected={selectedSection === item.id}
-                    onClick={() => handleSectionChange(item.id)}
-                  >
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Drawer>
-          
-          <Box 
-            component="main" 
-            sx={{ 
-              flexGrow: 1, 
-              bgcolor: 'background.default', 
-              minHeight: '100vh',
-              position: 'relative',
-              zIndex: 1,
-              overflow: 'auto'
-            }}
-          >
-            {loading && (
-              <Box sx={{ 
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                zIndex: 2
-              }}>
-                <CircularProgress />
+              <Divider />
+              <List>
+                {menuItems.map((item) => (
+                  <ListItem key={item.id} disablePadding>
+                    <ListItemButton
+                      selected={selectedSection === item.id}
+                      onClick={() => handleSectionChange(item.id)}
+                    >
+                      <ListItemIcon>{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.label} />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+              <Box sx={{ flexGrow: 1 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', pb: 3 }}>
+                <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} placement="top">
+                  <IconButton onClick={colorMode.toggleColorMode} color="inherit" size="large">
+                    {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+                  </IconButton>
+                </Tooltip>
               </Box>
-            )}
+            </Drawer>
             
-            {error && (
-              <Alert severity="error" sx={{ m: 2 }}>
-                {error}
+            <Box 
+              component="main" 
+              sx={{ 
+                flexGrow: 1, 
+                bgcolor: 'background.default', 
+                minHeight: '100vh',
+                position: 'relative',
+                zIndex: 1,
+                overflow: 'auto'
+              }}
+            >
+              {loading && (
+                <Box sx={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                  zIndex: 2
+                }}>
+                  <CircularProgress />
+                </Box>
+              )}
+              
+              {error && (
+                <Alert severity="error" sx={{ m: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              
+              {selectedSection === 'config' && (
+                <BootstrapConfig onConfigChange={handleBootstrapChange} />
+              )}
+              
+              {selectedSection === 'overview' && isConfigured && (
+                <OverviewSection
+                  topics={topics}
+                  brokers={brokers}
+                  consumers={consumers}
+                />
+              )}
+              
+              {selectedSection === 'brokers' && isConfigured && (
+                <BrokersSection
+                  brokers={brokers}
+                  onRefresh={fetchBrokers}
+                />
+              )}
+              
+              {selectedSection === 'topics' && isConfigured && (
+                <TopicsSection
+                  topics={topics}
+                  selectedTopic={selectedTopic}
+                  messages={messages}
+                  messageLimit={messageLimit}
+                  sortOrder={sortOrder}
+                  autoRefresh={autoRefresh}
+                  onTopicChange={handleTopicChange}
+                  onMessageLimitChange={handleMessageLimitChange}
+                  onSortOrderChange={handleSortOrderChange}
+                  onAutoRefreshChange={setAutoRefresh}
+                  onRefresh={fetchTopics}
+                  onLoadMessages={loadMessages}
+                  onDeleteTopic={handleDeleteTopic}
+                  onDeleteMessages={handleDeleteMessages}
+                  onSendMessage={handleSendMessage}
+                  onCreateTopic={handleCreateTopic}
+                  brokerCount={brokers.length}
+                />
+              )}
+              
+              {selectedSection === 'consumers' && isConfigured && (
+                <ConsumersSection
+                  consumers={consumers}
+                  onRefresh={fetchConsumers}
+                />
+              )}
+            </Box>
+
+            {/* Create Topic Dialog */}
+            <Dialog 
+              open={createTopicOpen} 
+              onClose={() => setCreateTopicOpen(false)}
+              disableEnforceFocus
+              sx={{ zIndex: 1400 }}
+            >
+              <DialogTitle>Create New Topic</DialogTitle>
+              <DialogContent>
+                <TextField
+                  autoFocus
+                  margin="dense"
+                  label="Topic Name"
+                  fullWidth
+                  value={newTopic.name}
+                  onChange={(e) => setNewTopic({ ...newTopic, name: e.target.value })}
+                />
+                <TextField
+                  margin="dense"
+                  label="Partitions"
+                  type="number"
+                  fullWidth
+                  value={newTopic.partitions}
+                  onChange={(e) => setNewTopic({ ...newTopic, partitions: parseInt(e.target.value) })}
+                />
+                <TextField
+                  margin="dense"
+                  label="Replication Factor"
+                  type="number"
+                  fullWidth
+                  value={newTopic.replicationFactor}
+                  onChange={(e) => setNewTopic({ ...newTopic, replicationFactor: parseInt(e.target.value) })}
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setCreateTopicOpen(false)}>Cancel</Button>
+                <Button onClick={() => handleCreateTopic(newTopic)} variant="contained">Create</Button>
+              </DialogActions>
+            </Dialog>
+
+            <ChangePasswordDialog 
+              open={changePasswordOpen}
+              onClose={() => setChangePasswordOpen(false)}
+            />
+          </>
+        ) : (
+          <Box 
+            sx={{ 
+              width: '100%', 
+              height: '100vh', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              position: 'relative',
+              zIndex: 1
+            }}
+          >
+            <Paper sx={{ p: 4, maxWidth: 400, width: '100%' }}>
+              <Typography variant="h5" gutterBottom align="center">Kafka UI</Typography>
+              <Typography variant="body1" gutterBottom align="center" color="text.secondary">
+                Please log in to continue
+              </Typography>
+            </Paper>
+          </Box>
+        )}
+
+        {/* Login Dialog */}
+        <Dialog 
+          open={!isLoggedIn && loginOpen} 
+          onClose={() => {}}  // Prevent closing
+          disableEnforceFocus
+          disableAutoFocus
+          disableEscapeKeyDown
+          sx={{ zIndex: 1400 }}
+        >
+          <DialogTitle>Login</DialogTitle>
+          <DialogContent>
+            {loginError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {loginError}
               </Alert>
             )}
-            
-            {selectedSection === 'config' && (
-              <BootstrapConfig onConfigChange={handleBootstrapChange} />
-            )}
-            
-            {selectedSection === 'overview' && isConfigured && (
-              <OverviewSection
-                topics={topics}
-                brokers={brokers}
-                consumers={consumers}
-              />
-            )}
-            
-            {selectedSection === 'brokers' && isConfigured && (
-              <BrokersSection
-                brokers={brokers}
-                onRefresh={fetchBrokers}
-              />
-            )}
-            
-            {selectedSection === 'topics' && isConfigured && (
-              <TopicsSection
-                topics={topics}
-                selectedTopic={selectedTopic}
-                messages={messages}
-                messageLimit={messageLimit}
-                sortOrder={sortOrder}
-                autoRefresh={autoRefresh}
-                onTopicChange={handleTopicChange}
-                onMessageLimitChange={handleMessageLimitChange}
-                onSortOrderChange={handleSortOrderChange}
-                onAutoRefreshChange={setAutoRefresh}
-                onRefresh={fetchTopics}
-                onLoadMessages={loadMessages}
-                onDeleteTopic={handleDeleteTopic}
-                onDeleteMessages={handleDeleteMessages}
-                onSendMessage={handleSendMessage}
-                onCreateTopic={handleCreateTopic}
-                brokerCount={brokers.length}
-              />
-            )}
-            
-            {selectedSection === 'consumers' && isConfigured && (
-              <ConsumersSection
-                consumers={consumers}
-                onRefresh={fetchConsumers}
-              />
-            )}
-          </Box>
-
-          {/* Create Topic Dialog */}
-          <Dialog 
-            open={createTopicOpen} 
-            onClose={() => setCreateTopicOpen(false)}
-            disableEnforceFocus
-            sx={{ zIndex: 1400 }}
-          >
-            <DialogTitle>Create New Topic</DialogTitle>
-            <DialogContent>
-              <TextField
-                autoFocus
-                margin="dense"
-                label="Topic Name"
-                fullWidth
-                value={newTopic.name}
-                onChange={(e) => setNewTopic({ ...newTopic, name: e.target.value })}
-              />
-              <TextField
-                margin="dense"
-                label="Partitions"
-                type="number"
-                fullWidth
-                value={newTopic.partitions}
-                onChange={(e) => setNewTopic({ ...newTopic, partitions: parseInt(e.target.value) })}
-              />
-              <TextField
-                margin="dense"
-                label="Replication Factor"
-                type="number"
-                fullWidth
-                value={newTopic.replicationFactor}
-                onChange={(e) => setNewTopic({ ...newTopic, replicationFactor: parseInt(e.target.value) })}
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setCreateTopicOpen(false)}>Cancel</Button>
-              <Button onClick={() => handleCreateTopic(newTopic)} variant="contained">Create</Button>
-            </DialogActions>
-          </Dialog>
-
-          <ChangePasswordDialog 
-            open={changePasswordOpen}
-            onClose={() => setChangePasswordOpen(false)}
-          />
-        </>
-      ) : (
-        <Box 
-          sx={{ 
-            width: '100%', 
-            height: '100vh', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            position: 'relative',
-            zIndex: 1
-          }}
-        >
-          <Paper sx={{ p: 4, maxWidth: 400, width: '100%' }}>
-            <Typography variant="h5" gutterBottom align="center">Kafka UI</Typography>
-            <Typography variant="body1" gutterBottom align="center" color="text.secondary">
-              Please log in to continue
-            </Typography>
-          </Paper>
-        </Box>
-      )}
-
-      {/* Login Dialog */}
-      <Dialog 
-        open={!isLoggedIn && loginOpen} 
-        onClose={() => {}}  // Prevent closing
-        disableEnforceFocus
-        disableAutoFocus
-        disableEscapeKeyDown
-        sx={{ zIndex: 1400 }}
-      >
-        <DialogTitle>Login</DialogTitle>
-        <DialogContent>
-          {loginError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {loginError}
-            </Alert>
-          )}
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Username"
-            fullWidth
-            value={loginData.username}
-            onChange={(e) => {
-              setLoginData({ ...loginData, username: e.target.value });
-              setLoginError(null);
-            }}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                handleLogin();
-              }
-            }}
-            error={!!loginError}
-          />
-          <TextField
-            margin="dense"
-            label="Password"
-            type="password"
-            fullWidth
-            value={loginData.password}
-            onChange={(e) => {
-              setLoginData({ ...loginData, password: e.target.value });
-              setLoginError(null);
-            }}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                handleLogin();
-              }
-            }}
-            error={!!loginError}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={handleLogin} 
-            variant="contained"
-            disabled={!loginData.username || !loginData.password}
-          >
-            Login
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Username"
+              fullWidth
+              value={loginData.username}
+              onChange={(e) => {
+                setLoginData({ ...loginData, username: e.target.value });
+                setLoginError(null);
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleLogin();
+                }
+              }}
+              error={!!loginError}
+            />
+            <TextField
+              margin="dense"
+              label="Password"
+              type="password"
+              fullWidth
+              value={loginData.password}
+              onChange={(e) => {
+                setLoginData({ ...loginData, password: e.target.value });
+                setLoginError(null);
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleLogin();
+                }
+              }}
+              error={!!loginError}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={handleLogin} 
+              variant="contained"
+              disabled={!loginData.username || !loginData.password}
+            >
+              Login
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </ThemeProvider>
   );
 }
 

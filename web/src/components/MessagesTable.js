@@ -14,11 +14,13 @@ import {
   DialogActions,
   Button,
   Paper,
-  Grid
+  Grid,
+  useTheme
 } from '@mui/material';
 
 export const MessagesTable = React.memo(({ messages }) => {
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const theme = useTheme();
 
   const handleMessageClick = (message) => {
     setSelectedMessage(message);
@@ -118,15 +120,15 @@ export const MessagesTable = React.memo(({ messages }) => {
             <Typography variant="h6">Message Content</Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Typography><strong>Key:</strong></Typography>
-              <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50' }}>
-                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <Paper variant="outlined" sx={{ p: 1, bgcolor: theme.palette.background.paper }}>
+                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.primary' }}>
                   {selectedMessage?.key || '<empty>'}
                 </Typography>
               </Paper>
               
               <Typography><strong>Value:</strong></Typography>
-              <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50' }}>
-                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <Paper variant="outlined" sx={{ p: 1, bgcolor: theme.palette.background.paper }}>
+                <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.primary' }}>
                   {selectedMessage?.value || '<empty>'}
                 </Typography>
               </Paper>

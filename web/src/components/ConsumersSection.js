@@ -31,29 +31,27 @@ export const ConsumersSection = ({ consumers, onRefresh }) => {
           <TableHead>
             <TableRow>
               <TableCell>Group ID</TableCell>
-              <TableCell>Topic</TableCell>
-              <TableCell>Partition</TableCell>
-              <TableCell>Current Offset</TableCell>
-              <TableCell>Log End Offset</TableCell>
-              <TableCell>Lag</TableCell>
+              <TableCell>Member ID</TableCell>
+              <TableCell>Topics</TableCell>
+              <TableCell>Partitions</TableCell>
+              <TableCell>Error</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {consumers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={5} align="center">
                   <Typography color="text.secondary">No consumers available</Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              consumers.map((consumer) => (
-                <TableRow key={`${consumer.groupId}-${consumer.topic}-${consumer.partition}`}>
+              consumers.map((consumer, idx) => (
+                <TableRow key={`${consumer.groupId}-${consumer.memberId || idx}`}> 
                   <TableCell>{consumer.groupId}</TableCell>
-                  <TableCell>{consumer.topic}</TableCell>
-                  <TableCell>{consumer.partition}</TableCell>
-                  <TableCell>{consumer.currentOffset}</TableCell>
-                  <TableCell>{consumer.logEndOffset}</TableCell>
-                  <TableCell>{consumer.lag}</TableCell>
+                  <TableCell>{consumer.memberId || 'N/A'}</TableCell>
+                  <TableCell>{consumer.topics && consumer.topics.length > 0 ? consumer.topics.join(', ') : 'N/A'}</TableCell>
+                  <TableCell>{consumer.partitions && consumer.partitions.length > 0 ? consumer.partitions.join(', ') : 'N/A'}</TableCell>
+                  <TableCell>{consumer.error || ''}</TableCell>
                 </TableRow>
               ))
             )}

@@ -25,11 +25,11 @@ type User struct {
 // ensureUsersFile creates the users.csv file if it doesn't exist
 func ensureUsersFile() error {
 	// Create data directory if it doesn't exist
-	if err := os.MkdirAll("data", 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join("src", "data"), 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %v", err)
 	}
 
-	filePath := filepath.Join("data", usersFile)
+	filePath := filepath.Join("src", "data", usersFile)
 
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -65,7 +65,7 @@ func GetUser(username string) (*User, error) {
 		return nil, err
 	}
 
-	file, err := os.OpenFile(filepath.Join("data", usersFile), os.O_RDONLY, 0644)
+	file, err := os.OpenFile(filepath.Join("src", "data", usersFile), os.O_RDONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open users file: %v", err)
 	}
@@ -99,7 +99,7 @@ func UpdateUserPassword(username, newPassword string) error {
 		return err
 	}
 
-	file, err := os.OpenFile(filepath.Join("data", usersFile), os.O_RDONLY, 0644)
+	file, err := os.OpenFile(filepath.Join("src", "data", usersFile), os.O_RDONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open users file: %v", err)
 	}
@@ -129,7 +129,7 @@ func UpdateUserPassword(username, newPassword string) error {
 	}
 
 	// Write back to file
-	file, err = os.Create(filepath.Join("data", usersFile))
+	file, err = os.Create(filepath.Join("src", "data", usersFile))
 	if err != nil {
 		return fmt.Errorf("failed to create users file: %v", err)
 	}
